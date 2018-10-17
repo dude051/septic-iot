@@ -9,4 +9,4 @@ Mongoose-OS - [https://mongoose-os.com](https://mongoose-os.com)
 
 ### Languages
 - C/C++
-- Javascript
+- Javascript (mJS)

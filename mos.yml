@@ -1,6 +1,7 @@
-author: mongoose-os
-description: Mongoose OS firmware for C/C++ on ESP8266
+author: Justin Seubert
+description: Mongoose OS firmware for C/C++ on ESP8266 made to control a septic pump.
 version: 1.0
+manifest_version: 2017-09-29
 
 libs_version: ${mos.version}
 modules_version: ${mos.version}
@@ -8,43 +9,24 @@ mongoose_os_version: ${mos.version}
 
 tags:
   - c
-
 sources:
   - src
-
 filesystem:
   - fs
-
 config_schema:
-  - ["board", "o", {title: "Board layout configuration"}]
-  - ["board.led1.pin", "i", -1, {title: "LED GPIO pin"}]
-  - ["board.led1.active_high", "b", true, {title: "True if LED is on when output is high (1)"}]
-  - ["board.led2.pin", "i", -1, {title: "LED GPIO pin"}]
-  - ["board.led2.active_high", "b", true, {title: "True if LED is on when output is high (1)"}]
-  - ["board.led3.pin", "i", -1, {title: "LED GPIO pin"}]
-  - ["board.led3.active_high", "b", true, {title: "True if LED is on when output is high (1)"}]
-  - ["board.btn1.pin", "i", -1, {title: "Button GPIO pin"}]
-  - ["board.btn1.pull_up", "b", false, {title: "True if button is pulled up when inactive"}]
-  - ["board.btn2.pin", "i", -1, {title: "Button GPIO pin"}]
-  - ["board.btn2.pull_up", "b", false, {title: "True if button is pulled up when inactive"}]
-  - ["board.btn3.pin", "i", -1, {title: "Button GPIO pin"}]
-  - ["board.btn3.pull_up", "b", false, {title: "True if button is pulled up when inactive"}]
-  - ["board.led1.pin", 2]
-  - ["board.led1.active_high", false]
-  - ["board.btn1.pin", 0]
-  - ["board.btn1.pull_up", true]
-  - ["provision.btn.pin", 0]
-  - ["provision.btn.pull_up", true]
 
 libs:
   - origin: https://github.com/mongoose-os-libs/aws
+  - origin: https://github.com/mongoose-os-libs/boards
   - origin: https://github.com/mongoose-os-libs/core
+  - origin: https://github.com/mongoose-os-libs/dash
   - origin: https://github.com/mongoose-os-libs/wifi
   - origin: https://github.com/mongoose-os-libs/rpc-mqtt
   - origin: https://github.com/mongoose-os-libs/rpc-service-config
   - origin: https://github.com/mongoose-os-libs/rpc-service-fs
+  - origin: https://github.com/mongoose-os-libs/rpc-uart
+  - origin: https://github.com/mongoose-os-libs/rpc-service-ota
   - origin: https://github.com/mongoose-os-libs/ota-shadow
-  - origin: https://github.com/mongoose-os-libs/sntp 
-
-# Used by the mos tool to catch mos binaries incompatible with this file format
-manifest_version: 2017-05-18
+  - origin: https://github.com/mongoose-os-libs/sntp
+  - origin: https://github.com/mongoose-os-libs/crontab
+  - origin: https://github.com/mongoose-os-libs/rpc-service-cron
