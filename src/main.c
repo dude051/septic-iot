@@ -12,11 +12,15 @@
 #define BUTTON1_PIN 5
 #define FMT "{led: %B, relay1: %B, relay2: %B}"
 
+static bool led1_state = false;
+static bool relay1_state = false;
+static bool relay2_state = false;
+
 static void report_state(void) {
     mgos_shadow_updatef(0, FMT,
-                        mgos_gpio_read(LED1_PIN),
-                        mgos_gpio_read(RELAY1_PIN),
-                        mgos_gpio_read(RELAY2_PIN));
+                        led1_state,
+                        relay1_state,
+                        relay2_state);
 }
 
 static void shadow_cb(int ev, void *evd, void *arg) {
@@ -40,14 +44,14 @@ static void shadow_cb(int ev, void *evd, void *arg) {
     LOG(LL_INFO, ("Shawdow Response: %.*s", (int) event_data->len, event_data->p));
 
     /* Synchronise state and set actuals if changed */
-    //json_scanf(event_data->p, event_data->len, FMT, &s_led_reading, &s_relay1_reading, &s_relay2_reading);
+    json_scanf(event_data->p, event_data->len, FMT, &led1_state, &relay1_state, &relay2_state);
 
     if (ev == MGOS_SHADOW_UPDATE_DELTA)
     {
         LOG(LL_INFO, ("Shawdow: Synchronise state locally"));
-        //mgos_gpio_write(LED1_PIN, s_led_reading);
-        //mgos_gpio_write(RELAY1_PIN, s_relay1_reading);
-        //mgos_gpio_write(RELAY2_PIN, s_relay2_reading);
+        mgos_gpio_write(LED1_PIN, led1_state);
+        mgos_gpio_write(RELAY1_PIN, relay1_state);
+        mgos_gpio_write(RELAY2_PIN, relay2_state);
 
         LOG(LL_INFO, ("Shawdow: Reporting updated state"));
         report_state();
@@ -73,8 +77,9 @@ void pump_action(char action[5]) {
       action_bool = 1;
     }
     mgos_gpio_write(RELAY1_PIN, action_bool);
+    LOG(LL_INFO, ("Relay1 set -> %i", action_bool));
   }
-  //s_relay1_reading = action_bool;
+  relay1_state = action_bool;
   char topic[100], message[160];
   struct json_out out = JSON_OUT_BUF(message, sizeof(message));
 
@@ -93,7 +98,6 @@ void pump_action(char action[5]) {
   bool res = mgos_mqtt_pub(topic, message, strlen(message), 1, false);
   LOG(LL_INFO, ("Published to MQTT: %s", res ? "yes" : "no"));
   report_state();
-  LOG(LL_INFO, ("Relay1 set -> %s", action));
 }
 
 void pump_cb(struct mg_str action, struct mg_str payload, void *userdata) {
@@ -140,7 +144,7 @@ static void led_cb(char action[5]) {
     mgos_gpio_write(LED1_PIN, action_bool);
   }
 
-  //s_led_reading = action_bool;
+  led1_state = action_bool;
   report_state();
   LOG(LL_INFO, ("LED1 set -> %s", action));
 }
