@@ -61,16 +61,7 @@ Shadow.addHandler(function(event, obj) {
     if (!uptime) uptime = Timer.set(60000, Timer.REPEAT, reportState, null);
 
     print('  Setting up Crontab to control pump schedule');
-    //let f = ffi('int gpio_write(int, int)');   f(2, 1);
-    let Crontab = {
-      set: ffi('void mgos_crontab_register_handler(char*, void (*)(char*, char*, userdata), userdata)')
-    };
-    Crontab.set("on", function(){
-      setGPIO(relay1, 0);
-    }, null );
-    Crontab.set("off", function(){
-      setGPIO(relay1, 1);
-    }, null );
+    if (!crontab) crontab = Timer.set(1000, Timer.REPEAT, crontab, null);
 
   } else if (event === 'UPDATE_DELTA') {
     print('GOT DELTA:', JSON.stringify(obj));
