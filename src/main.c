@@ -10,12 +10,12 @@
 #define RELAY1_PIN 14
 #define RELAY2_PIN 12
 #define BUTTON1_PIN 5
-#define FMT "{led: %s, relay1: %s, relay2: %B}"
-#define STATE "{led: %Q, relay1: %Q, relay2: %B, uptime: %Q}"
+#define FMT "{led: %s, relay1: %s, relay2: %s, uptime: %s}"
+#define STATE "{led: %Q, relay1: %Q, relay2: %Q, uptime: %Q}"
 
 static char led1_state[6] = "on";
 static char relay1_state[6] = "off";
-static bool relay2_state = false;
+static char relay2_state[6] = "off";
 
 static void report_state(void) {
   char uptime[25];
@@ -38,11 +38,11 @@ void pump_action(char action[5]) {
   {
     if (strcmp(action, "on") == 0)
     {
-      action_bool = 1;
+      action_bool = 0;
     }
     else if (strcmp(action, "off") == 0)
     {
-      action_bool = 0;
+      action_bool = 1;
     }
     mgos_gpio_write(RELAY1_PIN, action_bool);
   }
@@ -186,6 +186,7 @@ static void wifi_cb(int ev, void *evd, void *arg) {
       led_cb("on");
       break;
   }
+  (void) evd;
   (void) arg;
 }
 #endif /* MGOS_HAVE_WIFI */
