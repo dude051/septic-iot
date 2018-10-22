@@ -125,28 +125,8 @@ static void button_cb(int pin, void *arg) {
   (void) arg;
 }
 
-static void timer_cb(void *arg) {
+static void heartbeat_cb(void *arg) {
   report_state();
-  (void) arg;
-}
-
-static void net_cb(int ev, void *evd, void *arg) {
-  switch (ev) {
-    case MGOS_NET_EV_DISCONNECTED:
-      LOG(LL_INFO, ("%s", "Net disconnected"));
-      break;
-    case MGOS_NET_EV_CONNECTING:
-      LOG(LL_INFO, ("%s", "Net connecting..."));
-      break;
-    case MGOS_NET_EV_CONNECTED:
-      LOG(LL_INFO, ("%s", "Net connected"));
-      break;
-    case MGOS_NET_EV_IP_ACQUIRED:
-      LOG(LL_INFO, ("%s", "Net got IP address"));
-      break;
-  }
-
-  (void) evd;
   (void) arg;
 }
 
@@ -205,23 +185,6 @@ static void wifi_cb(int ev, void *evd, void *arg) {
       LOG(LL_INFO, ("WiFi STA IP acquired %p", arg));
       led_cb("on");
       break;
-    case MGOS_WIFI_EV_AP_STA_CONNECTED: {
-      struct mgos_wifi_ap_sta_connected_arg *aa =
-          (struct mgos_wifi_ap_sta_connected_arg *) evd;
-      LOG(LL_INFO, ("WiFi AP STA connected MAC %02x:%02x:%02x:%02x:%02x:%02x",
-                    aa->mac[0], aa->mac[1], aa->mac[2], aa->mac[3], aa->mac[4],
-                    aa->mac[5]));
-      break;
-    }
-    case MGOS_WIFI_EV_AP_STA_DISCONNECTED: {
-      struct mgos_wifi_ap_sta_disconnected_arg *aa =
-          (struct mgos_wifi_ap_sta_disconnected_arg *) evd;
-      LOG(LL_INFO,
-          ("WiFi AP STA disconnected MAC %02x:%02x:%02x:%02x:%02x:%02x",
-           aa->mac[0], aa->mac[1], aa->mac[2], aa->mac[3], aa->mac[4],
-           aa->mac[5]));
-      break;
-    }
   }
   (void) arg;
 }
@@ -241,7 +204,7 @@ enum mgos_app_init_result mgos_app_init(void) {
   mgos_gpio_set_mode(RELAY1_PIN, MGOS_GPIO_MODE_OUTPUT);
 
   /* Heartbeat timer */
-  mgos_set_timer(60000, MGOS_TIMER_REPEAT, timer_cb, NULL);
+  mgos_set_timer(60000, MGOS_TIMER_REPEAT, heartbeat_cb, NULL);
 
   /* Crontab handlers */
   mgos_crontab_register_handler(mg_mk_str("on"), pump_cb, NULL);
@@ -266,8 +229,6 @@ enum mgos_app_init_result mgos_app_init(void) {
   }
 
   /* Network connectivity events */
-  mgos_event_add_group_handler(MGOS_EVENT_GRP_NET, net_cb, NULL);
-
 #ifdef MGOS_HAVE_WIFI
   mgos_event_add_group_handler(MGOS_WIFI_EV_BASE, wifi_cb, NULL);
 #endif
