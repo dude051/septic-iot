@@ -32,3 +32,4 @@ moc_*.cpp
 .qmake.stash
 v7.c
 /build
+/deps
