@@ -10,17 +10,144 @@
 #define RELAY1_PIN 14
 #define RELAY2_PIN 12
 #define BUTTON1_PIN 5
-#define FMT "{led: %B, relay1: %B, relay2: %B}"
+#define FMT "{led: %s, relay1: %s, relay2: %B}"
+#define STATE "{led: %Q, relay1: %Q, relay2: %B, uptime: %Q}"
 
-static bool led1_state = false;
-static bool relay1_state = false;
+static char led1_state[6] = "on";
+static char relay1_state[6] = "off";
 static bool relay2_state = false;
 
 static void report_state(void) {
-    mgos_shadow_updatef(0, FMT,
-                        led1_state,
-                        relay1_state,
-                        relay2_state);
+  char uptime[25];
+  sprintf(uptime, "%0.1f", mgos_uptime());
+  mgos_shadow_updatef(0, STATE,
+                      led1_state,
+                      relay1_state,
+                      relay2_state,
+                      uptime
+                    );
+}
+
+void pump_action(char action[5]) {
+  bool action_bool = 1;
+  if (strcmp(action, "toggle") == 0)
+  {
+    action_bool = mgos_gpio_toggle(RELAY1_PIN);
+  }
+  else
+  {
+    if (strcmp(action, "on") == 0)
+    {
+      action_bool = 1;
+    }
+    else if (strcmp(action, "off") == 0)
+    {
+      action_bool = 0;
+    }
+    mgos_gpio_write(RELAY1_PIN, action_bool);
+  }
+  char topic[100], message[160];
+  struct json_out out = JSON_OUT_BUF(message, sizeof(message));
+
+  time_t now=time(0);
+  struct tm *timeinfo = localtime(&now);
+
+  snprintf(topic, sizeof(topic), "pump/status");
+  json_printf(&out, "{pump: \"%s\", free_ram: %lu, device: \"%s\", timestamp: \"%02d:%02d:%02d\"}",
+              (char *) action,
+              (unsigned long) mgos_get_free_heap_size(),
+              (char *) mgos_sys_config_get_device_id(),
+              (int) timeinfo->tm_hour,
+              (int) timeinfo->tm_min,
+              (int) timeinfo->tm_sec);
+
+  bool res = mgos_mqtt_pub(topic, message, strlen(message), 1, false);
+  LOG(LL_INFO, ("Published to MQTT: %s", res ? "yes" : "no"));
+  LOG(LL_INFO, ("Relay1 set -> %s", action));
+  strncpy(relay1_state, action, 6);
+}
+
+void pump_cb(struct mg_str action, struct mg_str payload, void *userdata) {
+  char topic[100], message[160], action_passed[3];
+  struct json_out out = JSON_OUT_BUF(message, sizeof(message));
+
+  time_t t = time(0);
+  struct tm* timeinfo = localtime(&t);
+
+  snprintf(topic, sizeof(topic), "crontab");
+  json_printf(&out, "{set_pump: \"%s\", free_ram: %lu, device: \"%s\", timestamp: \"%02d:%02d:%02d\"}",
+              (char *) action.p,
+              (unsigned long) mgos_get_free_heap_size(),
+              (char *) mgos_sys_config_get_device_id(),
+              (int) timeinfo->tm_hour,
+              (int) timeinfo->tm_min,
+              (int) timeinfo->tm_sec);
+
+  bool res = mgos_mqtt_pub(topic, message, strlen(message), 1, false);
+  LOG(LL_INFO, ("Published to MQTT: %s", res ? "yes" : "no"));
+
+  snprintf(action_passed, sizeof(action_passed), action.p);
+  pump_action(action_passed);
+  report_state();
+
+  (void) payload;
+  (void) userdata;
+}
+
+static void led_cb(char action[5]) {
+  bool action_bool = 1;
+  if (strcmp(action, "toggle") == 0)
+  {
+    action_bool = mgos_gpio_toggle(LED1_PIN);
+  }
+  else {
+    if (strcmp(action, "on") == 0)
+    {
+      action_bool = 0;
+    }
+    else if (strcmp(action, "off") == 0)
+    {
+      action_bool = 1;
+    }
+    mgos_gpio_write(LED1_PIN, action_bool);
+  }
+
+  LOG(LL_INFO, ("LED1 set -> %s", action));
+  strncpy(led1_state, action, 6);
+}
+
+static void button_cb(int pin, void *arg) {
+  char buf[8];
+  mgos_gpio_toggle(mgos_sys_config_get_board_led3_pin());
+  LOG(LL_INFO, ("Pin: %s, button pushed", mgos_gpio_str(pin, buf)));
+  pump_action("toggle");
+  report_state();
+  (void) arg;
+}
+
+static void timer_cb(void *arg) {
+  report_state();
+  (void) arg;
+}
+
+static void net_cb(int ev, void *evd, void *arg) {
+  switch (ev) {
+    case MGOS_NET_EV_DISCONNECTED:
+      LOG(LL_INFO, ("%s", "Net disconnected"));
+      break;
+    case MGOS_NET_EV_CONNECTING:
+      LOG(LL_INFO, ("%s", "Net connecting..."));
+      break;
+    case MGOS_NET_EV_CONNECTED:
+      LOG(LL_INFO, ("%s", "Net connected"));
+      break;
+    case MGOS_NET_EV_IP_ACQUIRED:
+      LOG(LL_INFO, ("%s", "Net got IP address"));
+      break;
+  }
+
+  (void) evd;
+  (void) arg;
 }
 
 static void shadow_cb(int ev, void *evd, void *arg) {
@@ -49,139 +176,14 @@ static void shadow_cb(int ev, void *evd, void *arg) {
     if (ev == MGOS_SHADOW_UPDATE_DELTA)
     {
         LOG(LL_INFO, ("Shawdow: Synchronise state locally"));
-        mgos_gpio_write(LED1_PIN, led1_state);
-        mgos_gpio_write(RELAY1_PIN, relay1_state);
-        mgos_gpio_write(RELAY2_PIN, relay2_state);
+        led_cb(led1_state);
+        pump_action(relay1_state);
 
         LOG(LL_INFO, ("Shawdow: Reporting updated state"));
         report_state();
     }
 
     (void) arg;
-}
-
-void pump_action(char action[5]) {
-  bool action_bool = 1;
-  if (strcmp(action, "toggle") == 0)
-  {
-    action_bool = mgos_gpio_toggle(RELAY1_PIN);
-  }
-  else
-  {
-    if (strcmp(action, "on") == 0)
-    {
-      action_bool = 0;
-    }
-    else if (strcmp(action, "off") == 0)
-    {
-      action_bool = 1;
-    }
-    mgos_gpio_write(RELAY1_PIN, action_bool);
-    LOG(LL_INFO, ("Relay1 set -> %i", action_bool));
-  }
-  relay1_state = action_bool;
-  char topic[100], message[160];
-  struct json_out out = JSON_OUT_BUF(message, sizeof(message));
-
-  time_t now=time(0);
-  struct tm *timeinfo = localtime(&now);
-
-  snprintf(topic, sizeof(topic), "pump/status");
-  json_printf(&out, "{pump: \"%s\", free_ram: %lu, device: \"%s\", timestamp: \"%02d:%02d:%02d\"}",
-              (char *) action,
-              (unsigned long) mgos_get_free_heap_size(),
-              (char *) mgos_sys_config_get_device_id(),
-              (int) timeinfo->tm_hour,
-              (int) timeinfo->tm_min,
-              (int) timeinfo->tm_sec);
-
-  bool res = mgos_mqtt_pub(topic, message, strlen(message), 1, false);
-  LOG(LL_INFO, ("Published to MQTT: %s", res ? "yes" : "no"));
-  report_state();
-}
-
-void pump_cb(struct mg_str action, struct mg_str payload, void *userdata) {
-  char topic[100], message[160], action_passed[3];
-  struct json_out out = JSON_OUT_BUF(message, sizeof(message));
-
-  time_t t = time(0);
-  struct tm* timeinfo = localtime(&t);
-
-  snprintf(topic, sizeof(topic), "crontab");
-  json_printf(&out, "{set_pump: \"%s\", free_ram: %lu, device: \"%s\", timestamp: \"%02d:%02d:%02d\"}",
-              (char *) action.p,
-              (unsigned long) mgos_get_free_heap_size(),
-              (char *) mgos_sys_config_get_device_id(),
-              (int) timeinfo->tm_hour,
-              (int) timeinfo->tm_min,
-              (int) timeinfo->tm_sec);
-
-  bool res = mgos_mqtt_pub(topic, message, strlen(message), 1, false);
-  LOG(LL_INFO, ("Published to MQTT: %s", res ? "yes" : "no"));
-
-  snprintf(action_passed, sizeof(action_passed), action.p);
-  pump_action(action_passed);
-
-  (void) payload;
-  (void) userdata;
-}
-
-static void led_cb(char action[5]) {
-  bool action_bool = 1;
-  if (strcmp(action, "toggle") == 0)
-  {
-    action_bool = mgos_gpio_toggle(LED1_PIN);
-  }
-  else {
-    if (strcmp(action, "on") == 0)
-    {
-      action_bool = 0;
-    }
-    else if (strcmp(action, "off") == 0)
-    {
-      action_bool = 1;
-    }
-    mgos_gpio_write(LED1_PIN, action_bool);
-  }
-
-  led1_state = action_bool;
-  report_state();
-  LOG(LL_INFO, ("LED1 set -> %s", action));
-}
-
-static void button_cb(int pin, void *arg) {
-  char buf[8];
-  mgos_gpio_toggle(mgos_sys_config_get_board_led3_pin());
-  LOG(LL_INFO, ("Pin: %s, button pushed", mgos_gpio_str(pin, buf)));
-  pump_action("toggle");
-  (void) arg;
-}
-
-static void timer_cb(void *arg) {
-  LOG(LL_INFO, ("uptime: %.2lf, RAM: %lu, %lu free", mgos_uptime(),
-                (unsigned long) mgos_get_heap_size(),
-                (unsigned long) mgos_get_free_heap_size()));
-  (void) arg;
-}
-
-static void net_cb(int ev, void *evd, void *arg) {
-  switch (ev) {
-    case MGOS_NET_EV_DISCONNECTED:
-      LOG(LL_INFO, ("%s", "Net disconnected"));
-      break;
-    case MGOS_NET_EV_CONNECTING:
-      LOG(LL_INFO, ("%s", "Net connecting..."));
-      break;
-    case MGOS_NET_EV_CONNECTED:
-      LOG(LL_INFO, ("%s", "Net connected"));
-      break;
-    case MGOS_NET_EV_IP_ACQUIRED:
-      LOG(LL_INFO, ("%s", "Net got IP address"));
-      break;
-  }
-
-  (void) evd;
-  (void) arg;
 }
 
 #ifdef MGOS_HAVE_WIFI
@@ -239,7 +241,7 @@ enum mgos_app_init_result mgos_app_init(void) {
   mgos_gpio_set_mode(RELAY1_PIN, MGOS_GPIO_MODE_OUTPUT);
 
   /* Heartbeat timer */
-  mgos_set_timer(10000, MGOS_TIMER_REPEAT, timer_cb, NULL);
+  mgos_set_timer(60000, MGOS_TIMER_REPEAT, timer_cb, NULL);
 
   /* Crontab handlers */
   mgos_crontab_register_handler(mg_mk_str("on"), pump_cb, NULL);
