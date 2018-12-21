@@ -6,16 +6,16 @@
 #include "mgos_shadow.h"
 #include "mgos_crontab.h"
 
-#define LED1_PIN mgos_sys_config_get_board_led1_pin()
+#define LED1_PIN 2
 #define RELAY1_PIN 14
 #define RELAY2_PIN 12
 #define BUTTON1_PIN 5
 #define FMT "{led: %s, relay1: %s, relay2: %s, uptime: %s}"
 #define STATE "{led: %Q, relay1: %Q, relay2: %Q, uptime: %Q}"
 
-static char led1_state[6] = "on";
-static char relay1_state[6] = "off";
-static char relay2_state[6] = "off";
+static char led1_state[9] = "on";
+static char relay1_state[9] = "off";
+static char relay2_state[9] = "off";
 
 static void report_state(void) {
   char uptime[25];
@@ -28,7 +28,7 @@ static void report_state(void) {
                     );
 }
 
-void pump_action(char action[5]) {
+void pump_action(char action[9]) {
   bool action_bool = 1;
   if (strcmp(action, "toggle") == 0)
   {
@@ -64,11 +64,11 @@ void pump_action(char action[5]) {
   bool res = mgos_mqtt_pub(topic, message, strlen(message), 1, false);
   LOG(LL_INFO, ("Published to MQTT: %s", res ? "yes" : "no"));
   LOG(LL_INFO, ("Relay1 set -> %s", action));
-  strncpy(relay1_state, action, 6);
+  strncpy(relay1_state, action, 9);
 }
 
-void pump_cb(struct mg_str action, struct mg_str payload, void *userdata) {
-  char topic[100], message[160], action_passed[3];
+void crontab_cb(struct mg_str action, struct mg_str payload, void *userdata) {
+  char topic[100], message[160], action_passed[4];
   struct json_out out = JSON_OUT_BUF(message, sizeof(message));
 
   time_t t = time(0);
@@ -94,7 +94,12 @@ void pump_cb(struct mg_str action, struct mg_str payload, void *userdata) {
   (void) userdata;
 }
 
-static void led_cb(char action[5]) {
+static void config_cb(struct mg_connection *c, const char *topic, int topic_len,
+  const char *msg, int msg_len, void *userdata) {
+
+}
+
+static void led_cb(char action[9]) {
   bool action_bool = 1;
   if (strcmp(action, "toggle") == 0)
   {
@@ -103,17 +108,17 @@ static void led_cb(char action[5]) {
   else {
     if (strcmp(action, "on") == 0)
     {
-      action_bool = 0;
+      action_bool = 1;
     }
     else if (strcmp(action, "off") == 0)
     {
-      action_bool = 1;
+      action_bool = 0;
     }
     mgos_gpio_write(LED1_PIN, action_bool);
   }
 
   LOG(LL_INFO, ("LED1 set -> %s", action));
-  strncpy(led1_state, action, 6);
+  strncpy(led1_state, action, 9);
 }
 
 static void button_cb(int pin, void *arg) {
@@ -208,10 +213,13 @@ enum mgos_app_init_result mgos_app_init(void) {
   mgos_set_timer(60000, MGOS_TIMER_REPEAT, heartbeat_cb, NULL);
 
   /* Crontab handlers */
-  mgos_crontab_register_handler(mg_mk_str("on"), pump_cb, NULL);
-  mgos_crontab_register_handler(mg_mk_str("off"), pump_cb, NULL);
+  mgos_crontab_register_handler(mg_mk_str("on"), crontab_cb, NULL);
+  mgos_crontab_register_handler(mg_mk_str("off"), crontab_cb, NULL);
 
-  /* Publish to MQTT on button press */
+  /* Subscribe to configuration topic */
+  mgos_mqtt_sub("remote_config", config_cb, NULL);
+
+  /* Button configuration */
   int btn_pin = BUTTON1_PIN;
   if (btn_pin >= 0) {
     enum mgos_gpio_pull_type btn_pull;
